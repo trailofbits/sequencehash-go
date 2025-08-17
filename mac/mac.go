@@ -170,9 +170,12 @@ func (m *ElementMAC) BlockSize() int { return m.innerHash.BlockSize() }
 func (m *ElementMAC) Sum(b []byte) []byte {
 	if !m.finished {
 		countBytes := encodeIntMSBF(m.elementCount)
-		m.innerHash.Write(countBytes)
+		outBytes := encodeIntMSBF(uint64(m.outerHash.Size()))
+		//m.innerHash.Write(countBytes)
 
 		innerResult := m.innerHash.Sum([]byte(nil))
+		m.outerHash.Write(countBytes)
+		m.outerHash.Write(outBytes)
 		m.outerHash.Write(innerResult)
 		m.finished = true
 	}
