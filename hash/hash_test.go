@@ -1,4 +1,4 @@
-package mac
+package hash
 
 import (
 	"bytes"
@@ -20,7 +20,6 @@ type testCase struct {
 	BaseHash      string   `json:"base_hash"`
 	ExpectedOut   string   `json:"expected_out"`
 	ExpectedInner string   `json:"expected_inner"`
-	Key           string   `json:"key"`
 	Separator     string   `json:"separator"`
 	TestInputs    []string `json:"test_inputs"`
 	RawInner      []string `json:"raw_inner"`
@@ -78,7 +77,7 @@ func getHash(algo string) func() hash.Hash {
 	return nil
 }
 
-// Returns true if `ElementMAC` produces the correct output for the given key,
+// Returns true if `ElementHash` produces the correct output for the given
 // separator, and inputs. If not, returns false. If there is an issue decoding
 // the test vector (e.g., an invalid hexadecimal string), calls `t.Fatalf`
 func (c *testCase) ValidateOuter(t *testing.T) bool {
@@ -87,26 +86,21 @@ func (c *testCase) ValidateOuter(t *testing.T) bool {
 		t.Fatalf("Could not load hash function: \"%s\"", c.BaseHash)
 	}
 
-	// Convert our key and separator from hex to binary
-	key, err := hex.DecodeString(c.Key)
-	if err != nil {
-		t.Fatalf("Could not decode key: \"%s\"", err)
-	}
 	sep, err := hex.DecodeString(c.Separator)
 	if err != nil {
 		t.Fatalf("Could not decode separator: \"%s\"", err)
 	}
 
-	// Create an ElementMAC object and check the output
-	macObj := NewWithSeparator(hashFunc, key, sep)
+	// Create an ElementHash object and check the output
+	hshObj := NewWithSeparator(hashFunc, sep)
 	for i := 0; i < len(c.TestInputs); i++ {
 		input, err := hex.DecodeString(c.TestInputs[i])
 		if err != nil {
 			t.Fatalf("Could not decode input: \"%s\"", err)
 		}
-		macObj.Write(input)
+		hshObj.Write(input)
 	}
-	output := macObj.Sum([]byte(nil))
+	output := hshObj.Sum([]byte(nil))
 	testOutput, err := hex.DecodeString(c.ExpectedOut)
 	if err != nil {
 		t.Fatalf("Could not decode input: \"%s\"", err)
@@ -122,7 +116,7 @@ func (c *testCase) ValidateOuter(t *testing.T) bool {
 
 // Returns true if the given raw input values produce the correct inner and
 // outer hash values. This is intended to test the test vectors rather than the
-// `ElementMAC` code. The `raw_inner` and `raw_outer` values are useful for
+// `ElementHash` code. The `raw_inner` and `raw_outer` values are useful for
 // debugging implementation problems; if they are out of sync with the rest of
 // a given test vector, that needs to be flagged.
 func (c *testCase) ValidateRaw(t *testing.T) bool {
@@ -181,8 +175,10 @@ func (c *testCase) ValidateRaw(t *testing.T) bool {
 }
 
 func TestAll(t *testing.T) {
-	paths := []string{"vectors_mac_sha256.json", "vectors_mac_sha384.json", "vectors_mac_sha512.json",
-		"vectors_mac_sha3_256.json", "vectors_mac_sha3_384.json", "vectors_mac_sha3_512.json"}
+	//	paths := []string{"vectors_sha256.json", "vectors_sha384.json", "vectors_sha512.json",
+	//		"vectors_sha3_256.json", "vectors_sha3_384.json", "vectors_sha3_512.json"}
+	paths := []string{"vectors_hash_sha256.json", "vectors_hash_sha384.json", "vectors_hash_sha512.json",
+		"vectors_hash_sha3_256.json", "vectors_hash_sha3_384.json", "vectors_hash_sha3_512.json"}
 
 	for i := 0; i < len(paths); i++ {
 		caseFile := loadTestFile(paths[i])
