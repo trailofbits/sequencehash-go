@@ -14,13 +14,13 @@ const (
 
 type ElementFunc struct {
 	innerHash    hash.Hash
-	outerHash    hash.Hash
 	hashFunc     func() hash.Hash
-	key          []byte
-	sep          []byte
+	lenKey       uint64
+	lenSep       uint64
+	derivedKey   []byte
+	derivedSep   []byte
 	funcID       uint64
 	elementCount uint64
-	finished     bool
 }
 
 // Encodes a 64-bit integer into a 16-byte array, most-significant byte first.
@@ -64,6 +64,7 @@ func padData(data []byte, blockSize uint64) []byte {
 // `data` unchanged (if it is exactly the same length as the underlying hash
 // block), or hashing `data` and padding out the result to the length of the
 // underlying hash block.
+// func deriveBlock(data []byte, h func() hash.Hash) []byte {
 func deriveBlock(data []byte, h func() hash.Hash) []byte {
 	blockSize := h().BlockSize()
 
@@ -105,53 +106,25 @@ func genOuterHeader(h func() hash.Hash, keyLen uint64, sepLen uint64,
 	return header
 }
 
-func (f *ElementFunc) initialize() {
-	lenKey := uint64(len(f.key))
-	lenSep := uint64(len(f.sep))
-
-	// Derive our key and separator blocks
-	keyBlock := deriveBlock(f.key, f.hashFunc)
-	sepBlock := deriveBlock(f.sep, f.hashFunc)
-
-	// Start with fresh hashes
-	f.innerHash = f.hashFunc()
-	f.outerHash = f.hashFunc()
-
-	// Initialize the inner hash
-	innerHeader := genInnerHeader(f.hashFunc, lenKey, f.funcID)
-	f.innerHash.Write(innerHeader)
-	f.innerHash.Write(keyBlock)
-
-	// Initializer the outer hash
-	outerHeader := genOuterHeader(f.hashFunc, lenKey, lenSep, f.funcID)
-	f.outerHash.Write(outerHeader)
-	f.outerHash.Write(sepBlock)
-	f.outerHash.Write(keyBlock)
-}
-
-func (f *ElementFunc) finalize() {
-	if !f.finished {
-		countBytes := encodeIntMSBF(uint64(f.elementCount))
-		outBytes := encodeIntMSBF(uint64(f.hashFunc().Size()))
-		innerHash := f.innerHash.Sum([]byte(nil))
-
-		f.outerHash.Write(countBytes)
-		f.outerHash.Write(outBytes)
-		f.outerHash.Write(innerHash)
-
-		f.finished = true
-	}
-}
-
 func (f *ElementFunc) Sum(b []byte) []byte {
-	f.finalize()
-	return f.outerHash.Sum(b)
+	outerHash := f.hashFunc()
+
+	outerHeader := genOuterHeader(f.hashFunc, f.lenKey, f.lenSep, f.funcID)
+	outerHash.Write(outerHeader)
+	outerHash.Write(f.derivedSep)
+	outerHash.Write(f.derivedKey)
+
+	countBytes := encodeIntMSBF(uint64(f.elementCount))
+	outBytes := encodeIntMSBF(uint64(f.hashFunc().Size()))
+	innerHash := f.innerHash.Sum([]byte(nil))
+
+	outerHash.Write(countBytes)
+	outerHash.Write(outBytes)
+	outerHash.Write(innerHash)
+	return outerHash.Sum(b)
 }
 
 func (f *ElementFunc) Write(data []byte) {
-	if f.finished {
-		panic("Cannot write to ElementFunc that has alreay been computed")
-	}
 	lenBytes := encodeIntLSBF(uint64(len(data)))
 	f.innerHash.Write(lenBytes)
 	f.innerHash.Write(data)
@@ -159,7 +132,7 @@ func (f *ElementFunc) Write(data []byte) {
 }
 
 func (f *ElementFunc) Size() int {
-	return f.outerHash.Size()
+	return f.innerHash.Size()
 }
 
 func (f *ElementFunc) BlockSize() int {
@@ -167,24 +140,36 @@ func (f *ElementFunc) BlockSize() int {
 }
 
 func (f *ElementFunc) Reset() {
-	f.initialize()
+	innerHeader := genInnerHeader(f.hashFunc, f.lenKey, f.funcID)
+	f.innerHash = f.hashFunc()
+	f.innerHash.Write(innerHeader)
+	f.innerHash.Write(f.derivedKey)
+	f.elementCount = 0
 }
 
 func New(h func() hash.Hash, eFunc uint64, key []byte, sep []byte) ElementFunc {
-	keyCopy := make([]byte, len(key))
-	sepCopy := make([]byte, len(sep))
-	copy(keyCopy, key)
-	copy(sepCopy, sep)
 	elementFunc := ElementFunc{
 		innerHash:    nil,
-		outerHash:    nil,
 		hashFunc:     h,
-		key:          keyCopy,
-		sep:          sepCopy,
+		lenKey:       uint64(len(key)),
+		lenSep:       uint64(len(sep)),
+		derivedKey:   nil,
+		derivedSep:   nil,
 		funcID:       eFunc,
 		elementCount: 0,
-		finished:     false,
 	}
-	elementFunc.initialize()
+	elementFunc.initialize(key, sep)
 	return elementFunc
+}
+
+func (f *ElementFunc) initialize(key []byte, sep []byte) {
+	// Derive our key and separator blocks
+	f.derivedKey = deriveBlock(key, f.hashFunc)
+	f.derivedSep = deriveBlock(sep, f.hashFunc)
+
+	// Initialize the inner hash
+	innerHeader := genInnerHeader(f.hashFunc, f.lenKey, f.funcID)
+	f.innerHash = f.hashFunc()
+	f.innerHash.Write(innerHeader)
+	f.innerHash.Write(f.derivedKey)
 }

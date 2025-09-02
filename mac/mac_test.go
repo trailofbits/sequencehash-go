@@ -114,6 +114,8 @@ func (c *testCase) ValidateOuter(t *testing.T) bool {
 
 	// No match? That's a failed test vector
 	if !bytes.Equal(output, testOutput) {
+		fmt.Println("Expected: ", testOutput)
+		fmt.Println("Computed: ", output)
 		return false
 	}
 

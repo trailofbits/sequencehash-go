@@ -10,6 +10,7 @@ import (
 	"hash"
 	"os"
 	"path/filepath"
+	"reflect"
 
 	"encoding/hex"
 	"encoding/json"
@@ -175,8 +176,6 @@ func (c *testCase) ValidateRaw(t *testing.T) bool {
 }
 
 func TestAll(t *testing.T) {
-	//	paths := []string{"vectors_sha256.json", "vectors_sha384.json", "vectors_sha512.json",
-	//		"vectors_sha3_256.json", "vectors_sha3_384.json", "vectors_sha3_512.json"}
 	paths := []string{"vectors_hash_sha256.json", "vectors_hash_sha384.json", "vectors_hash_sha512.json",
 		"vectors_hash_sha3_256.json", "vectors_hash_sha3_384.json", "vectors_hash_sha3_512.json"}
 
@@ -191,5 +190,17 @@ func TestAll(t *testing.T) {
 			}
 		}
 		fmt.Printf("Tests for \"%s\" passed.\n", paths[i])
+	}
+}
+
+func TestReset(t *testing.T) {
+	hshObj := New(sha256.New)
+	hshObj.Write([]byte("abcd"))
+	sum1 := hshObj.Sum([]byte(nil))
+	hshObj.Reset()
+	hshObj.Write([]byte("abcd"))
+	sum2 := hshObj.Sum([]byte(nil))
+	if !reflect.DeepEqual(sum1, sum2) {
+		t.Fatalf("Values not equal: %x != %x", sum1, sum2)
 	}
 }
