@@ -17,14 +17,14 @@ type ElementFunc struct {
 	hashFunc     func() hash.Hash
 	lenKey       uint64
 	lenSep       uint64
-	derivedKey   []byte
-	derivedSep   []byte
+	derivedKey   []byte // Needed to allow `Reset()`
+	derivedSep   []byte // Needed to allow `Reset()`
 	funcID       uint64
 	elementCount uint64
 }
 
 // Encodes a 64-bit integer into a 16-byte array, most-significant byte first.
-// Note that, in the `ElementMAC` specification, inputs are allowed to be as
+// Note that, in the `ElementHash` specification, inputs are allowed to be as
 // long as 2^128 - 1 bytes. However, Go doesn't have built-in support for 128-
 // bit integers, so this implementation cheats by assuming all inputs are no
 // longer than 2^64-1 bytes, and padding with zeroes.
@@ -64,14 +64,17 @@ func padData(data []byte, blockSize uint64) []byte {
 // `data` unchanged (if it is exactly the same length as the underlying hash
 // block), or hashing `data` and padding out the result to the length of the
 // underlying hash block.
-// func deriveBlock(data []byte, h func() hash.Hash) []byte {
+//
+//	If len(data) <= BlockSize
+//		return PAD(data)
+//	Else
+//		return PAD(hash(data))
 func deriveBlock(data []byte, h func() hash.Hash) []byte {
-	blockSize := h().BlockSize()
+	reducer := h()
 
 	// Hash our value down if it's too large
 	var reduced []byte
-	if len(data) > blockSize {
-		reducer := h()
+	if len(data) > reducer.BlockSize() {
 		reducer.Write(data)
 		reduced = reducer.Sum([]byte(nil))
 	} else {
@@ -79,12 +82,19 @@ func deriveBlock(data []byte, h func() hash.Hash) []byte {
 	}
 
 	// Pad out our reduced key
-	padded := padData(reduced, uint64(blockSize))
+	padded := padData(reduced, uint64(reducer.BlockSize()))
 
 	// Zero pad and return the block
 	return padded
 }
 
+// Generates the inner header for the hash, according to the specication:
+//
+//	PAD(
+//	   "ELTHSH_I" ||
+//	    EncodeMSBF(funcID) ||
+//	    EncodeMSBF(keyLen) ||
+//	)
 func genInnerHeader(h func() hash.Hash, keyLen uint64, funcID uint64) []byte {
 	keyLenBytes := encodeIntMSBF(keyLen)
 	funcBytes := encodeIntMSBF(funcID)
@@ -94,6 +104,14 @@ func genInnerHeader(h func() hash.Hash, keyLen uint64, funcID uint64) []byte {
 	return header
 }
 
+// Generates the outer header for the hash, according to the specication:
+//
+//	PAD(
+//	   "ELTHSH_O" ||
+//	   EncodeMSBF(funcID) ||
+//	   EncodeMSBF(sepLen) ||
+//	   EncodeMSBF(keyLen) ||
+//	)
 func genOuterHeader(h func() hash.Hash, keyLen uint64, sepLen uint64,
 	funcID uint64) []byte {
 	keyLenBytes := encodeIntMSBF(keyLen)
@@ -125,6 +143,14 @@ func (f *ElementFunc) Sum(b []byte) []byte {
 }
 
 func (f *ElementFunc) Write(data []byte) {
+	// Because this implementation limits itself to 2^64-1 inputs instead of
+	// the 2^128-1 inputs from the spec, we want to flag when we get past our
+	// max and indicate that the max is due to the implementation, not the
+	// standard
+	if f.elementCount == 0xffff_ffff_ffff_ffff { // coverage-ignore
+		panic("Maximum implementation-supported element count exceeded")
+	}
+
 	lenBytes := encodeIntLSBF(uint64(len(data)))
 	f.innerHash.Write(lenBytes)
 	f.innerHash.Write(data)
@@ -139,6 +165,7 @@ func (f *ElementFunc) BlockSize() int {
 	return f.innerHash.BlockSize()
 }
 
+// Resets the ElementFunc instance for reuse.
 func (f *ElementFunc) Reset() {
 	innerHeader := genInnerHeader(f.hashFunc, f.lenKey, f.funcID)
 	f.innerHash = f.hashFunc()
@@ -147,6 +174,7 @@ func (f *ElementFunc) Reset() {
 	f.elementCount = 0
 }
 
+// Creates a new ElementFunc instance and initializes it
 func New(h func() hash.Hash, eFunc uint64, key []byte, sep []byte) ElementFunc {
 	elementFunc := ElementFunc{
 		innerHash:    nil,

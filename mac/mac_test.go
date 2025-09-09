@@ -182,7 +182,7 @@ func (c *testCase) ValidateRaw(t *testing.T) bool {
 	return true
 }
 
-func TestAll(t *testing.T) {
+func TestAllVectors(t *testing.T) {
 	paths := []string{"vectors_mac_sha256.json", "vectors_mac_sha384.json", "vectors_mac_sha512.json",
 		"vectors_mac_sha3_256.json", "vectors_mac_sha3_384.json", "vectors_mac_sha3_512.json"}
 
@@ -197,5 +197,37 @@ func TestAll(t *testing.T) {
 			}
 		}
 		fmt.Printf("Tests for \"%s\" passed.\n", paths[i])
+	}
+}
+
+func TestReset(t *testing.T) {
+	key := []byte{0, 0, 0, 0, 0, 0, 0, 0}
+	mac := New(sha256.New, key)
+	mac.Write(key)
+	firstOut := mac.Sum([]byte(nil))
+	mac.Reset()
+	mac.Write(key)
+	secondOut := mac.Sum([]byte(nil))
+	if !bytes.Equal(firstOut, secondOut) {
+		t.Fatalf("Unequal MAC outputs")
+	}
+}
+
+func TestSizes(t *testing.T) {
+	key := []byte{0, 0, 0, 0, 0, 0, 0, 0}
+	mac := New(sha256.New, key)
+	if mac.BlockSize() != sha256.New().BlockSize() {
+		t.Fatalf("BlockSize mismatch in SHA256")
+	}
+	if mac.Size() != sha256.New().Size() {
+		t.Fatalf("Size mismatch in SHA256")
+	}
+
+	mac = New(sha512.New, key)
+	if mac.BlockSize() != sha512.New().BlockSize() {
+		t.Fatalf("BlockSize mismatch in SHA512")
+	}
+	if mac.Size() != sha512.New().Size() {
+		t.Fatalf("Size mismatch in SHA512")
 	}
 }

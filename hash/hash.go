@@ -22,14 +22,8 @@ func NewWithSeparator(h func() hash.Hash, sep []byte) ElementHash {
 	return ElementHash{eFunc: eFunc}
 }
 
-func (h *ElementHash) Write(data []byte) {
-	h.eFunc.Write(data)
-}
-
-func (h *ElementHash) Sum(b []byte) []byte {
-	return h.eFunc.Sum(b)
-}
-
-func (h *ElementHash) Size() int      { return h.eFunc.Size() }
-func (m *ElementHash) BlockSize() int { return m.eFunc.BlockSize() }
-func (m *ElementHash) Reset()         { m.eFunc.Reset() }
+func (h *ElementHash) Write(data []byte)   { h.eFunc.Write(data) }
+func (h *ElementHash) Sum(b []byte) []byte { return h.eFunc.Sum(b) }
+func (h *ElementHash) Size() int           { return h.eFunc.Size() }
+func (m *ElementHash) BlockSize() int      { return m.eFunc.BlockSize() }
+func (m *ElementHash) Reset()              { m.eFunc.Reset() }
