@@ -204,3 +204,16 @@ func TestReset(t *testing.T) {
 		t.Fatalf("Values not equal: %x != %x", sum1, sum2)
 	}
 }
+
+func TestDifferent(t *testing.T) {
+	hshObj := New(sha256.New)
+	hshObj.Write([]byte("ab"))
+	hshObj.Write([]byte("cd"))
+	sum1 := hshObj.Sum([]byte(nil))
+	fmt.Println("{}", sum1)
+
+	hshObj.Reset()
+	hshObj.Write([]byte("abcd"))
+	sum2 := hshObj.Sum([]byte(nil))
+	fmt.Println("{}", sum2)
+}
