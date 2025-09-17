@@ -4,7 +4,7 @@ package mac
 // ElementFunc package for more details.
 
 import (
-	"elementhash/elementfunc"
+	elementfunc "elementhash/internal"
 	"hash"
 )
 

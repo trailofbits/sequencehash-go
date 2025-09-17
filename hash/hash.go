@@ -1,7 +1,7 @@
 package hash
 
 import (
-	"elementhash/elementfunc"
+	elementfunc "elementhash/internal"
 	"hash"
 )
 
