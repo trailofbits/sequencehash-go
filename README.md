@@ -1,6 +1,6 @@
 # ElementHash and ElementMAC for Go
 
-This package provides the ElementHash and ElementMAC functions for the Go programming language. You can find more details about the ElementHash family of functions [here](http://www.elementhash.xyz/), but the short version is that writing to ElementHash and ElementMAC objects is an _atomic_ operation: writing `abcd` is _not_ the same as writing `ab` and `cd` separately.
+This package provides the ElementHash and ElementMAC functions for the Go programming language. You can find more details about the ElementHash family of functions [here](https://github.com/trailofbits/elementhash-spec), but the short version is that writing to ElementHash and ElementMAC objects is an _atomic_ operation: writing `abcd` is _not_ the same as writing `ab` and `cd` separately.
 
 You can use ElementHash and ElementMAC with nearly any underlying hash function.
 
@@ -95,6 +95,31 @@ The output will be
 ```
 e1f91ecb77153ffe0b0e2ca25d3696af4ebbdd6845ca9711ef2494867eb97765
 65506e9ec54e98568f2288ce7f9fcc41719ec17e89d95d7b120749a9c5701c5a
+```
+
+Similarly, changing the domain separator strings will result in distinct outputs. The code
+
+```go
+key := []byte{
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+
+mac1 := ElementMAC::NewWithSeparator(sha256.New, key, []byte("separator 0"))
+mac1.Write([]byte("abcd"))
+fmt.Println(mac1.Sum())
+
+mac2 := ElementMAC::NewWithSeparator(sha256.New, key, []byte("separator 1"))
+mac2.Write([]byte("abcd"))
+fmt.Println(mac2.Sum())
+```
+
+generates the output
+
+```
+2d90e29eb9bf55c4ef171ceaf491545da0e723b66e8f94fb27f2d5162ece3eaf
+01ee3044e38412e3f21afcfdb17216ce98acef13d3ba1462288b8cac9566cef8
 ```
 
 ## Tips
