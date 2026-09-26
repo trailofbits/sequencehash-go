@@ -1,55 +1,52 @@
-# ElementHash and ElementMAC for Go
+# SequenceHash and SequenceMAC for Go
 
-This package provides the ElementHash and ElementMAC functions for the Go programming language. You can find more details about the ElementHash family of functions [here](https://github.com/trailofbits/elementhash-spec), but the short version is that writing to ElementHash and ElementMAC objects is an _atomic_ operation: writing `abcd` is _not_ the same as writing `ab` and `cd` separately.
+This package provides the SequenceHash and SequenceMAC functions for the Go programming language. You can find more details about the SequenceHash family of functions [here](https://c2sp.org/sequencehash), but the short version is that writing to SequenceHash and SequenceMAC objects is an _atomic_ operation: writing `abcd` is _not_ the same as writing `ab` and `cd` separately.
 
-You can use ElementHash and ElementMAC with nearly any underlying hash function.
+You can use SequenceHash and SequenceMAC with nearly any underlying hash function.
 
-# How to Use ElementHash and ElementMAC
+# How to Use SequenceHash and SequenceMAC
 
-## Using ElementHash
+## Using SequenceHash
 
-To create an ElementHash object:
+To create an SequenceHash object:
 
 ```go
-import crypto::sha256;
-import elementhash::hash::ElementHash;
-
-hshObj := ElementHash::New(sha256.New)
-hshObj.Write([]byte('ab'))
-hshObj.Write([]byte('cd'))
-fmt.Println(hshObj.Sum())
-hshObj.Reset()
-hshObj.Write([]byte('abcd'))
-fmt.Println(hshObj.Sum())
+hshObj, _ := hash.New(sha256.New)
+hshObj.Add([]byte("ab"))
+hshObj.Add([]byte("cd"))
+fmt.Println(hshObj.Result())
+hshObj, _ = hash.New(sha256.New)
+hshObj.Add([]byte("abcd"))
+fmt.Println(hshObj.Result())
 ```
 
 Note that the outputs are different:
 
 ```
-[254, 79, 231, 169, 24, 156, 128, 90, 22, 165, 54, 40, 55, 148, 209, 104, 161, 57, 114, 33, 4, 168, 214, 172, 175, 204, 229, 105, 100, 255, 141, 133]
-[128, 218, 237, 206, 161, 254, 206, 177, 233, 129, 193, 36, 139, 60, 233, 192, 62, 233, 41, 142, 223, 196, 6, 84, 247, 190, 240, 119, 198, 42, 15, 11]
+[219 151 40 131 168 105 217 79 108 157 237 117 19 248 62 27 94 139 108 87 153 104 89 170 166 28 202 200 56 109 101 108]
+[18 113 65 89 228 94 40 101 249 20 209 186 105 67 125 39 19 117 221 128 40 205 81 3 101 197 70 248 246 210 209 22]
 ```
 
 You can add domain separation strings if you'll be hashing the same inputs to be  used for separate purposes:
 
 ```go
-hshObj1 := ElementHash::NewWithSeparator(sha256.New, []byte('separator1'))
-hshObj1.Write([]byte('abcd'))
-fmt.Println(hshObj1.Sum())
+hshObj1 := hash.New(sha256.New)
+hshObj1.Add([]byte('abcd'))
+fmt.Println(hshObj1.ResultWithCustomizer([]byte("customizer1")))
 
-hshObj2 := ElementHash::NewWithSeparator(sha256.New, []byte('separator2'))
+hshObj2 := hash.New(sha256.New)
 hshObj2.Write([]byte('abcd'))
-fmt.Println(hshObj2.Sum())
+fmt.Println(hshObj2.ResultWithCustomizer([]byte("customizer2")))
 ```
 
 ```
-[220, 120, 253, 85, 218, 167, 137, 238, 163, 44, 139, 101, 60, 168, 190, 58, 180, 52, 77, 14, 77, 106, 89, 116, 155, 156, 133, 169, 103, 83, 64, 195]
-[55, 172, 94, 52, 70, 241, 178, 13, 114, 247, 199, 230, 42, 231, 179, 171, 238, 106, 31, 45, 123, 209, 186, 167, 82, 174, 9, 85, 194, 224, 75, 54]
+[211 131 100 92 94 151 249 173 221 230 219 176 247 80 246 2 154 214 159 148 57 142 232 243 226 133 39 141 64 168 156 115]
+[225 183 31 172 39 159 251 163 216 45 23 105 33 66 57 37 103 207 121 132 241 11 191 115 16 84 55 67 33 31 107 133]
 ```
 
-## Using ElementMAC
+## Using SequenceMAC
 
-ElementMAC works similarly to ElementHash:
+SequenceMAC works similarly to SequenceHash, though the `New` command can return an error if the key you provide is too short:
 
 ```go
 key := []byte{  // key = SHA256("Give Jerry Solinas a raise")
@@ -58,12 +55,12 @@ key := []byte{  // key = SHA256("Give Jerry Solinas a raise")
     0xaa, 0x81, 0xac, 0xe6, 0xba, 0xdd, 0xba, 0x2f,
     0x8a, 0x59, 0xac, 0xaf, 0x8b, 0x49, 0xea, 0x06}
 
-mac1 := ElementMAC::NewWithSeparator(sha256.New, key, []byte("separator"))
-mac1.Write([]byte("abcd"))
-fmt.Println(mac1.Sum())
+mac1, _ := mac.New(sha256.New, key)
+mac1.Add([]byte("abcd"))
+fmt.Println(mac1.Result())
 ```
 
-You'll get `e1f91ecb77153ffe0b0e2ca25d3696af4ebbdd6845ca9711ef2494867eb97765` as your output.
+You'll get `[164 69 25 150 107 18 73 159 209 60 151 100 68 110 76 168 213 112 53 162 31 197 170 214 105 248 2 155 68 5 197 21]` as your output.
 
 Obviously, different keys should give you different outputs:
 
@@ -81,20 +78,20 @@ key2 := []byte{
     0x12, 0x07, 0x49, 0xa9, 0xc5, 0x70, 0x1c, 0x5a}
 
 
-mac1 := ElementMAC::NewWithSeparator(sha256.New, key1, []byte("separator"))
-mac1.Write([]byte("abcd"))
-fmt.Println(mac1.Sum())
+mac1 := mac.New(sha256.New, key1)
+mac1.Add([]byte("abcd"))
+fmt.Println(mac1.Result())
 
-mac2 := ElementMAC::NewWithSeparator(sha256.New, key2, []byte("separator"))
-mac2.Write([]byte("abcd"))
-fmt.Println(mac2.Sum())
+mac2 := mac.New(sha256.New, key2)
+mac2.Add([]byte("abcd"))
+fmt.Println(mac2.Result())
 ```
 
 The output will be
 
 ```
-e1f91ecb77153ffe0b0e2ca25d3696af4ebbdd6845ca9711ef2494867eb97765
-65506e9ec54e98568f2288ce7f9fcc41719ec17e89d95d7b120749a9c5701c5a
+[164 69 25 150 107 18 73 159 209 60 151 100 68 110 76 168 213 112 53 162 31 197 170 214 105 248 2 155 68 5 197 21]
+[248 62 94 120 207 184 75 82 218 53 232 66 121 83 182 89 186 114 7 59 46 191 72 175 137 227 25 180 244 180 38 90]
 ```
 
 Similarly, changing the domain separator strings will result in distinct outputs. The code
@@ -106,24 +103,26 @@ key := []byte{
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 
-mac1 := ElementMAC::NewWithSeparator(sha256.New, key, []byte("separator 0"))
-mac1.Write([]byte("abcd"))
-fmt.Println(mac1.Sum())
+mac1 := mac.New(sha256.New, key)
+mac1.Add([]byte("abcd"))
+fmt.Println(mac1.ResultWithCustomizer([]byte("customizer 0")))
 
-mac2 := ElementMAC::NewWithSeparator(sha256.New, key, []byte("separator 1"))
-mac2.Write([]byte("abcd"))
-fmt.Println(mac2.Sum())
+mac2 := mac.New(sha256.New, key)
+mac2.Add([]byte("abcd"))
+fmt.Println(mac2.ResultWithCustomizer([]byte("customizer 1")))
 ```
 
 generates the output
 
 ```
-2d90e29eb9bf55c4ef171ceaf491545da0e723b66e8f94fb27f2d5162ece3eaf
-01ee3044e38412e3f21afcfdb17216ce98acef13d3ba1462288b8cac9566cef8
+[169 65 205 61 25 176 98 184 253 37 33 156 54 101 208 245 51 80 232 211 171 184 89 238 30 178 16 0 104 125 120 7]
+[225 97 172 180 234 222 85 22 200 204 18 163 122 131 240 218 165 190 196 121 24 13 129 119 231 104 179 239 39 85 164 147]
 ```
 
-## Tips
+## A note on terminology
 
-ElementHash and ElementMAC instances can be reset using the `Reset` method, which can be more efficient in the case of large keys or separators.
+It's important to note that the API provided by SequenceHash is _not_ compatible with the standard `hash.Hash` API. This is not an accident.
 
-ElementHash and ElementMAC instances can be written to _after_ a hash is computed, allowing additional data to be incorporated into the hash. This can be useful for generating Fiat-Shamir challenges in complex ZK proofs, allowing inputs from early stages of a protocol to "carry into" later stages.
+The `Hash` interface provides the `io.Writer` interface, which deviates from the goal of SequenceHash. The `io.Writer` interface can write a partial buffer, and in I/O contexts, it's assumed that calling `Write(a)` immediately before calling `Write(b)` is the same as calling `Write` on the concatenation of `a` and `b` (barring race conditions and other oddball cases). SequenceHash behaves differently: hashing `a` and then `b` is not the same as hashing their concatenation, and there's no concept of a partial write.
+
+To prevent confusion, we use different method names. In lieu of `Write`, we use `Add`, and instead of `Sum`, we use `Result` (or `ResultWithCustomizer`).

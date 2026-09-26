@@ -1,30 +1,32 @@
-package elementfunc
+package sequencefunc
 
 import (
 	"encoding/binary"
 	"hash"
+	"crypto/subtle"
 )
 
 const (
-	ELT_HASH_I              = "ELTHSH_I"
-	ELT_HASH_O              = "ELTHSH_O"
+	SEQ_HASH_I              = "SEQHSH_I"
+	SEQ_HASH_O              = "SEQHSH_O"
 	FUNCTION_ID_MAC  uint64 = 1
 	FUNCTION_ID_HASH uint64 = 2
+	TWEAK_INNER byte = 0x55
+	TWEAK_OUTER byte = 0xaa
 )
 
-type ElementFunc struct {
+type SequenceFunc struct {
 	innerHash    hash.Hash
+	outerHash    hash.Hash
 	hashFunc     func() hash.Hash
-	lenKey       uint64
-	lenSep       uint64
-	derivedKey   []byte // Needed to allow `Reset()`
-	derivedSep   []byte // Needed to allow `Reset()`
+	lenKey       uint64	// Needed for generating the headers
 	funcID       uint64
-	elementCount uint64
+	SequenceCount uint64
+	finished bool
 }
 
 // Encodes a 64-bit integer into a 16-byte array, most-significant byte first.
-// Note that, in the `ElementHash` specification, inputs are allowed to be as
+// Note that, in the `SequenceHash` specification, inputs are allowed to be as
 // long as 2^128 - 1 bytes. However, Go doesn't have built-in support for 128-
 // bit integers, so this implementation cheats by assuming all inputs are no
 // longer than 2^64-1 bytes, and padding with zeroes.
@@ -46,10 +48,17 @@ func encodeIntMSBF(n uint64) []byte {
 // length of `data` is already a multiple of `blockSize`, no padding is
 // performed, except when `len(data) == 0`, in which case a string of
 // `blockSize` zeroes will be returned.
+//
+// Note that, if `blockSize` is 1, this is a no-op. If `blockSize` is 0, it is
+// updated to 1, rendering this a no-op. If you're using a hash with a 0- or
+// 1-byte block, you probably have larger problems than SequenceHash can solve.
 func padData(data []byte, blockSize uint64) []byte {
+	if blockSize < 1 {
+		blockSize = 1
+	}
 	dataLength := uint64(len(data))
 	blockCount := (dataLength + blockSize - 1) / blockSize
-	if blockCount == 0 {
+	if blockCount < 1 {
 		blockCount = 1
 	}
 
@@ -59,17 +68,7 @@ func padData(data []byte, blockSize uint64) []byte {
 	return append(data, padding...)
 }
 
-// Derives a key or separator block for `ElementMAC` by either padding `data`
-// to the length of the underlying hash block (if it is shorter), returning
-// `data` unchanged (if it is exactly the same length as the underlying hash
-// block), or hashing `data` and padding out the result to the length of the
-// underlying hash block.
-//
-//	If len(data) <= BlockSize
-//		return PAD(data)
-//	Else
-//		return PAD(hash(data))
-func deriveBlock(data []byte, h func() hash.Hash) []byte {
+func deriveBlock(data []byte, h func() hash.Hash, tweak byte) []byte {
 	reducer := h()
 
 	// Hash our value down if it's too large
@@ -81,8 +80,11 @@ func deriveBlock(data []byte, h func() hash.Hash) []byte {
 		reduced = data
 	}
 
-	// Pad out our reduced key
+	// Pad out our key
 	padded := padData(reduced, uint64(reducer.BlockSize()))
+
+	// Apply the tweak
+	padded[0] ^= tweak
 
 	// Zero pad and return the block
 	return padded
@@ -91,14 +93,14 @@ func deriveBlock(data []byte, h func() hash.Hash) []byte {
 // Generates the inner header for the hash, according to the specication:
 //
 //	PAD(
-//	   "ELTHSH_I" ||
+//	   "SEQHSH_I" ||
 //	    EncodeMSBF(funcID) ||
 //	    EncodeMSBF(keyLen) ||
 //	)
 func genInnerHeader(h func() hash.Hash, keyLen uint64, funcID uint64) []byte {
 	keyLenBytes := encodeIntMSBF(keyLen)
 	funcBytes := encodeIntMSBF(funcID)
-	header := append([]byte(ELT_HASH_I), funcBytes...)
+	header := append([]byte(SEQ_HASH_I), funcBytes...)
 	header = append(header, keyLenBytes...)
 	header = padData(header, uint64(h().BlockSize()))
 	return header
@@ -107,7 +109,7 @@ func genInnerHeader(h func() hash.Hash, keyLen uint64, funcID uint64) []byte {
 // Generates the outer header for the hash, according to the specication:
 //
 //	PAD(
-//	   "ELTHSH_O" ||
+//	   "SEQHSH_O" ||
 //	   EncodeMSBF(funcID) ||
 //	   EncodeMSBF(sepLen) ||
 //	   EncodeMSBF(keyLen) ||
@@ -117,87 +119,93 @@ func genOuterHeader(h func() hash.Hash, keyLen uint64, sepLen uint64,
 	keyLenBytes := encodeIntMSBF(keyLen)
 	sepLenBytes := encodeIntMSBF(sepLen)
 	funcBytes := encodeIntMSBF(funcID)
-	header := append([]byte(ELT_HASH_O), funcBytes...)
+	header := append([]byte(SEQ_HASH_O), funcBytes...)
 	header = append(header, sepLenBytes...)
 	header = append(header, keyLenBytes...)
 	header = padData(header, uint64(h().BlockSize()))
 	return header
 }
 
-func (f *ElementFunc) Sum(b []byte) []byte {
-	outerHash := f.hashFunc()
+func (f *SequenceFunc) ResultWithCustomizer(customizer []byte) []byte {
+	if f.finished {
+		panic("Cannot compute result twice")
+	}
+	// Tag the SequenceFunc object as non-updatable
+	f.finished = true
 
-	outerHeader := genOuterHeader(f.hashFunc, f.lenKey, f.lenSep, f.funcID)
-	outerHash.Write(outerHeader)
-	outerHash.Write(f.derivedSep)
-	outerHash.Write(f.derivedKey)
+	// Compute the inner hash
+	innerHash := f.innerHash.Sum(nil)
 
-	countBytes := encodeIntMSBF(uint64(f.elementCount))
-	outBytes := encodeIntMSBF(uint64(f.hashFunc().Size()))
-	innerHash := f.innerHash.Sum([]byte(nil))
+	// Compute the outer hash
+	outerHeader := genOuterHeader(f.hashFunc, f.lenKey, uint64(len(customizer)), f.funcID)
+	derivedCustomizer := deriveBlock(customizer, f.hashFunc, 0x00)
+	f.outerHash.Write(outerHeader)
+	f.outerHash.Write(derivedCustomizer)
+	f.outerHash.Write(encodeIntMSBF(f.SequenceCount))
+	f.outerHash.Write(encodeIntMSBF(uint64(f.innerHash.Size())))
+	f.outerHash.Write(innerHash)
 
-	outerHash.Write(countBytes)
-	outerHash.Write(outBytes)
-	outerHash.Write(innerHash)
-	return outerHash.Sum(b)
+	return f.outerHash.Sum(nil)
 }
 
-func (f *ElementFunc) Write(data []byte) {
+func (f *SequenceFunc) Sum() []byte {
+	return f.ResultWithCustomizer(nil)
+}
+
+func (f *SequenceFunc) Add(data []byte) {
 	// Because this implementation limits itself to 2^64-1 inputs instead of
 	// the 2^128-1 inputs from the spec, we want to flag when we get past our
 	// max and indicate that the max is due to the implementation, not the
 	// standard
-	if f.elementCount == 0xffff_ffff_ffff_ffff { // coverage-ignore
-		panic("Maximum implementation-supported element count exceeded")
+	if f.SequenceCount == 0xffff_ffff_ffff_ffff { // coverage-ignore
+		panic("Maximum implementation-supported Sequence count exceeded")
 	}
 
 	lenBytes := encodeIntLSBF(uint64(len(data)))
-	f.innerHash.Write(lenBytes)
 	f.innerHash.Write(data)
-	f.elementCount += 1
+	f.innerHash.Write(lenBytes)
+	f.SequenceCount += 1
 }
 
-func (f *ElementFunc) Size() int {
+func (f *SequenceFunc) Size() int {
 	return f.innerHash.Size()
 }
 
-func (f *ElementFunc) BlockSize() int {
+func (f *SequenceFunc) BlockSize() int {
 	return f.innerHash.BlockSize()
 }
 
-// Resets the ElementFunc instance for reuse.
-func (f *ElementFunc) Reset() {
-	innerHeader := genInnerHeader(f.hashFunc, f.lenKey, f.funcID)
-	f.innerHash = f.hashFunc()
-	f.innerHash.Write(innerHeader)
-	f.innerHash.Write(f.derivedKey)
-	f.elementCount = 0
-}
-
-// Creates a new ElementFunc instance and initializes it
-func New(h func() hash.Hash, eFunc uint64, key []byte, sep []byte) ElementFunc {
-	elementFunc := ElementFunc{
-		innerHash:    nil,
-		hashFunc:     h,
-		lenKey:       uint64(len(key)),
-		lenSep:       uint64(len(sep)),
-		derivedKey:   nil,
-		derivedSep:   nil,
-		funcID:       eFunc,
-		elementCount: 0,
+// Creates a new SequenceFunc instance and initializes it
+func New(h func() hash.Hash, eFunc uint64, key []byte) SequenceFunc {
+	SequenceFunc := SequenceFunc{
+		innerHash:     nil,
+		outerHash:     nil,
+		hashFunc:      h,
+		lenKey:        uint64(len(key)),
+		funcID:        eFunc,
+		SequenceCount: 0,
+		finished: false,
 	}
-	elementFunc.initialize(key, sep)
-	return elementFunc
+	SequenceFunc.initialize(key)
+	return SequenceFunc
 }
 
-func (f *ElementFunc) initialize(key []byte, sep []byte) {
+func (f *SequenceFunc) initialize(key []byte) {
 	// Derive our key and separator blocks
-	f.derivedKey = deriveBlock(key, f.hashFunc)
-	f.derivedSep = deriveBlock(sep, f.hashFunc)
+	derived_key_inner := deriveBlock(key, f.hashFunc, TWEAK_INNER)
+	derived_key_outer := deriveBlock(key, f.hashFunc, TWEAK_OUTER)
 
 	// Initialize the inner hash
 	innerHeader := genInnerHeader(f.hashFunc, f.lenKey, f.funcID)
 	f.innerHash = f.hashFunc()
+	f.innerHash.Write(derived_key_inner)
 	f.innerHash.Write(innerHeader)
-	f.innerHash.Write(f.derivedKey)
+
+	// Initialize the outer hash
+	f.outerHash = f.hashFunc()
+	f.outerHash.Write(derived_key_outer)
+
+	// Nix our copies of the derived keys
+	subtle.XORBytes(derived_key_inner, derived_key_inner, derived_key_inner)
+	subtle.XORBytes(derived_key_outer, derived_key_outer, derived_key_outer)
 }

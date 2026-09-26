@@ -1,4 +1,4 @@
-package elementfunc
+package sequencefunc
 
 import (
 	"bytes"

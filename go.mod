@@ -1,3 +1,3 @@
-module elementhash
+module sequencehash
 
 go 1.24.4
