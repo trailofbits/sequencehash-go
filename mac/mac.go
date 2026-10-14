@@ -4,14 +4,14 @@ package mac
 // SequenceFunc package for more details.
 
 import (
-	sequencefunc "sequencehash/internal"
-	"hash"
 	"fmt"
+	"hash"
+	sequencefunc "sequencehash-go/internal"
 )
 
 const (
 	SEQ_FUNC_MAC uint64 = 1
-	MIN_KEY_LEN uint64 = 32
+	MIN_KEY_LEN  uint64 = 32
 )
 
 type SequenceMAC struct {
@@ -37,8 +37,10 @@ func New(h func() hash.Hash, key []byte) (*SequenceMAC, error) {
 	return result, nil
 }
 
-func (m *SequenceMAC) Add(data []byte)  { m.eFunc.Add(data) }
-func (m *SequenceMAC) Result() []byte	{ return m.eFunc.Sum() }
-func (m *SequenceMAC) ResultWithCustomizer(cust []byte) []byte	{ return m.eFunc.ResultWithCustomizer(cust) }
-func (m *SequenceMAC) OutputSize() int  { return m.eFunc.Size() }
-func (m *SequenceMAC) BlockSize() int   { return m.eFunc.BlockSize() }
+func (m *SequenceMAC) Add(data []byte) { m.eFunc.Add(data) }
+func (m *SequenceMAC) Result() []byte  { return m.eFunc.Result() }
+func (m *SequenceMAC) ResultWithCustomizer(cust []byte) []byte {
+	return m.eFunc.ResultWithCustomizer(cust)
+}
+func (m *SequenceMAC) OutputSize() int { return m.eFunc.Size() }
+func (m *SequenceMAC) BlockSize() int  { return m.eFunc.BlockSize() }

@@ -1,9 +1,9 @@
 package sequencefunc
 
 import (
+	"crypto/subtle"
 	"encoding/binary"
 	"hash"
-	"crypto/subtle"
 )
 
 const (
@@ -11,21 +11,21 @@ const (
 	SEQ_HASH_O              = "SEQHSH_O"
 	FUNCTION_ID_MAC  uint64 = 1
 	FUNCTION_ID_HASH uint64 = 2
-	TWEAK_INNER byte = 0x55
-	TWEAK_OUTER byte = 0xaa
+	TWEAK_INNER      byte   = 0x55
+	TWEAK_OUTER      byte   = 0xaa
 )
 
 type SequenceFunc struct {
-	innerHash    hash.Hash
-	outerHash    hash.Hash
-	hashFunc     func() hash.Hash
-	lenKey       uint64	// Needed for generating the headers
-	funcID       uint64
+	innerHash     hash.Hash
+	outerHash     hash.Hash
+	hashFunc      func() hash.Hash
+	lenKey        uint64 // Needed for generating the headers
+	funcID        uint64
 	SequenceCount uint64
-	finished bool
+	finished      bool
 }
 
-// Encodes a 64-bit integer into a 16-byte array, most-significant byte first.
+// Encodes a 64-bit integer into a 16-byte array, least-significant byte first.
 // Note that, in the `SequenceHash` specification, inputs are allowed to be as
 // long as 2^128 - 1 bytes. However, Go doesn't have built-in support for 128-
 // bit integers, so this implementation cheats by assuming all inputs are no
@@ -36,7 +36,7 @@ func encodeIntLSBF(n uint64) []byte {
 	return encoded
 }
 
-// Encodes a 64-bit integer into a 16-byte array, least-significant byte first.
+// Encodes a 64-bit integer into a 16-byte array, most-significant byte first.
 // See comments for `encodeIntLSBF` for discussions of standards compliance.
 func encodeIntMSBF(n uint64) []byte {
 	encoded := binary.BigEndian.AppendUint64([]byte(nil), 0)
@@ -44,14 +44,10 @@ func encodeIntMSBF(n uint64) []byte {
 	return encoded
 }
 
-// Zero-pads the given data out to the next multiple of `blockSize`. If the
-// length of `data` is already a multiple of `blockSize`, no padding is
-// performed, except when `len(data) == 0`, in which case a string of
-// `blockSize` zeroes will be returned.
-//
-// Note that, if `blockSize` is 1, this is a no-op. If `blockSize` is 0, it is
-// updated to 1, rendering this a no-op. If you're using a hash with a 0- or
-// 1-byte block, you probably have larger problems than SequenceHash can solve.
+// Zero-pads the given data out to the next multiple of `blockSize`. This always
+// returns a _copy_ of the input, zero-padded out to a positive multiple of
+// `blockSize`. If `blockSize` is 0, it is treated as 1. The result is _always_
+// a new byte array with non-zero length.
 func padData(data []byte, blockSize uint64) []byte {
 	if blockSize < 1 {
 		blockSize = 1
@@ -63,9 +59,9 @@ func padData(data []byte, blockSize uint64) []byte {
 	}
 
 	totalLength := blockCount * blockSize
-	padLength := totalLength - dataLength
-	padding := make([]byte, padLength)
-	return append(data, padding...)
+	padded := make([]byte, totalLength)
+	copy(padded, data)
+	return padded
 }
 
 func deriveBlock(data []byte, h func() hash.Hash, tweak byte) []byte {
@@ -148,11 +144,16 @@ func (f *SequenceFunc) ResultWithCustomizer(customizer []byte) []byte {
 	return f.outerHash.Sum(nil)
 }
 
-func (f *SequenceFunc) Sum() []byte {
+func (f *SequenceFunc) Result() []byte {
 	return f.ResultWithCustomizer(nil)
 }
 
 func (f *SequenceFunc) Add(data []byte) {
+	// Check that we aren't adding to an already-finished instance
+	if f.finished {
+		panic("Cannot compute result twice")
+	}
+
 	// Because this implementation limits itself to 2^64-1 inputs instead of
 	// the 2^128-1 inputs from the spec, we want to flag when we get past our
 	// max and indicate that the max is due to the implementation, not the
@@ -184,7 +185,7 @@ func New(h func() hash.Hash, eFunc uint64, key []byte) SequenceFunc {
 		lenKey:        uint64(len(key)),
 		funcID:        eFunc,
 		SequenceCount: 0,
-		finished: false,
+		finished:      false,
 	}
 	SequenceFunc.initialize(key)
 	return SequenceFunc

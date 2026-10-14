@@ -1,8 +1,8 @@
 package mac
 
 import (
-	"crypto/subtle"
 	"crypto/sha256"
+	"crypto/subtle"
 	"fmt"
 
 	"encoding/hex"
@@ -39,7 +39,7 @@ func TestShortKey(t *testing.T) {
 }
 
 func TestDoubleResult(t *testing.T) {
-	defer func () {
+	defer func() {
 		if r := recover(); r != nil {
 			return
 		}
@@ -48,5 +48,5 @@ func TestDoubleResult(t *testing.T) {
 	hasher, _ := New(sha256.New, key)
 	_ = hasher.Result()
 	_ = hasher.Result()
-	fmt.Errorf("Second MAC should have caused panic!")
+	t.Errorf("Second MAC should have caused panic!")
 }

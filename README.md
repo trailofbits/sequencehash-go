@@ -30,12 +30,12 @@ Note that the outputs are different:
 You can add domain separation strings if you'll be hashing the same inputs to be  used for separate purposes:
 
 ```go
-hshObj1 := hash.New(sha256.New)
-hshObj1.Add([]byte('abcd'))
+hshObj1, _ := hash.New(sha256.New)
+hshObj1.Add([]byte("abcd"))
 fmt.Println(hshObj1.ResultWithCustomizer([]byte("customizer1")))
 
-hshObj2 := hash.New(sha256.New)
-hshObj2.Write([]byte('abcd'))
+hshObj2, _ := hash.New(sha256.New)
+hshObj2.Add([]byte("abcd"))
 fmt.Println(hshObj2.ResultWithCustomizer([]byte("customizer2")))
 ```
 

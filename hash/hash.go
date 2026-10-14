@@ -1,8 +1,8 @@
 package hash
 
 import (
-	sequencefunc "sequencehash/internal"
 	"hash"
+	sequencefunc "sequencehash-go/internal"
 )
 
 const (
@@ -24,8 +24,10 @@ func New(h func() hash.Hash) (*SequenceHash, error) {
 	return result, nil
 }
 
-func (m *SequenceHash) Add(data []byte)  { m.eFunc.Add(data) }
-func (m *SequenceHash) Result() []byte	{ return m.eFunc.Sum() }
-func (m *SequenceHash) ResultWithCustomizer(cust []byte) []byte	{ return m.eFunc.SumWithCustomizer(cust) }
-func (m *SequenceHash) OutputSize() int  { return m.eFunc.Size() }
-func (m *SequenceHash) BlockSize() int   { return m.eFunc.BlockSize() }
+func (m *SequenceHash) Add(data []byte) { m.eFunc.Add(data) }
+func (m *SequenceHash) Result() []byte  { return m.eFunc.Result() }
+func (m *SequenceHash) ResultWithCustomizer(cust []byte) []byte {
+	return m.eFunc.ResultWithCustomizer(cust)
+}
+func (m *SequenceHash) OutputSize() int { return m.eFunc.Size() }
+func (m *SequenceHash) BlockSize() int  { return m.eFunc.BlockSize() }
