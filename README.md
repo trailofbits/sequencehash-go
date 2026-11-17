@@ -44,6 +44,10 @@ fmt.Println(hshObj2.ResultWithCustomizer([]byte("customizer2")))
 [225 183 31 172 39 159 251 163 216 45 23 105 33 66 57 37 103 207 121 132 241 11 191 115 16 84 55 67 33 31 107 133]
 ```
 
+## Results are single-use
+
+Computing a result finalizes the object. Calling `Result` or `ResultWithCustomizer` a second time, or calling `Add` after a result, panics. To get outputs for several customization strings over the same inputs, use one object per customization string, as in the example above.
+
 ## Using SequenceMAC
 
 SequenceMAC works similarly to SequenceHash, though the `New` command can return an error if the key you provide is too short:
