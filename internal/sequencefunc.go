@@ -13,6 +13,10 @@ const (
 	FUNCTION_ID_HASH uint64 = 2
 	TWEAK_INNER      byte   = 0x55
 	TWEAK_OUTER      byte   = 0xaa
+
+	// Panic messages for using an instance after its result was computed.
+	PANIC_RESULT_TWICE     = "Cannot compute result twice"
+	PANIC_ADD_AFTER_RESULT = "Cannot add data after computing result"
 )
 
 type SequenceFunc struct {
@@ -122,9 +126,12 @@ func genOuterHeader(h func() hash.Hash, keyLen uint64, sepLen uint64,
 	return header
 }
 
+// ResultWithCustomizer finalizes the computation and returns its output.
+// It can be called only once per instance: a second call, or a later call to
+// Add, panics.
 func (f *SequenceFunc) ResultWithCustomizer(customizer []byte) []byte {
 	if f.finished {
-		panic("Cannot compute result twice")
+		panic(PANIC_RESULT_TWICE)
 	}
 	// Tag the SequenceFunc object as non-updatable
 	f.finished = true
@@ -151,7 +158,7 @@ func (f *SequenceFunc) Result() []byte {
 func (f *SequenceFunc) Add(data []byte) {
 	// Check that we aren't adding to an already-finished instance
 	if f.finished {
-		panic("Cannot compute result twice")
+		panic(PANIC_ADD_AFTER_RESULT)
 	}
 
 	// Because this implementation limits itself to 2^64-1 inputs instead of

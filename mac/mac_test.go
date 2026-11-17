@@ -50,3 +50,16 @@ func TestDoubleResult(t *testing.T) {
 	_ = hasher.Result()
 	t.Errorf("Second MAC should have caused panic!")
 }
+
+func TestAddAfterResult(t *testing.T) {
+	obj, _ := New(sha256.New, make([]byte, 32))
+	obj.Add([]byte("a"))
+	_ = obj.Result()
+
+	defer func() {
+		if r := recover(); fmt.Sprint(r) != "Cannot add data after computing result" {
+			t.Errorf("Add after Result: got panic %v", r)
+		}
+	}()
+	obj.Add([]byte("b"))
+}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"crypto/sha512"
+	"fmt"
 	"testing"
 )
 
@@ -110,5 +111,35 @@ func TestPadData(t *testing.T) {
 	longerPad := padData(longer, 32)
 	if !bytes.Equal(longerPad, paddedLonger) {
 		t.Fatalf("Length extenion is incorrect!")
+	}
+}
+
+// panicMessage runs f and returns the value it panicked with, or "" if it
+// returned normally.
+func panicMessage(f func()) (msg string) {
+	defer func() {
+		if r := recover(); r != nil {
+			msg = fmt.Sprint(r)
+		}
+	}()
+	f()
+	return ""
+}
+
+func TestUseAfterResult(t *testing.T) {
+	eFunc := New(sha256.New, FUNCTION_ID_HASH, nil)
+	if msg := panicMessage(func() { eFunc.Add([]byte("a")) }); msg != "" {
+		t.Fatalf("Add before Result panicked: %q", msg)
+	}
+	_ = eFunc.Result()
+
+	if msg := panicMessage(func() { eFunc.Add([]byte("b")) }); msg != "Cannot add data after computing result" {
+		t.Errorf("Add after Result: got panic %q", msg)
+	}
+	if msg := panicMessage(func() { eFunc.Result() }); msg != "Cannot compute result twice" {
+		t.Errorf("second Result: got panic %q", msg)
+	}
+	if msg := panicMessage(func() { eFunc.ResultWithCustomizer([]byte("c")) }); msg != "Cannot compute result twice" {
+		t.Errorf("ResultWithCustomizer after Result: got panic %q", msg)
 	}
 }
