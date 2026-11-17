@@ -60,7 +60,11 @@ mac1.Add([]byte("abcd"))
 fmt.Println(mac1.Result())
 ```
 
-You'll get `[164 69 25 150 107 18 73 159 209 60 151 100 68 110 76 168 213 112 53 162 31 197 170 214 105 248 2 155 68 5 197 21]` as your output.
+The output is:
+
+```
+[164 69 25 150 107 18 73 159 209 60 151 100 68 110 76 168 213 112 53 162 31 197 170 214 105 248 2 155 68 5 197 21]
+```
 
 Obviously, different keys should give you different outputs:
 
@@ -78,11 +82,11 @@ key2 := []byte{
     0x12, 0x07, 0x49, 0xa9, 0xc5, 0x70, 0x1c, 0x5a}
 
 
-mac1 := mac.New(sha256.New, key1)
+mac1, _ := mac.New(sha256.New, key1)
 mac1.Add([]byte("abcd"))
 fmt.Println(mac1.Result())
 
-mac2 := mac.New(sha256.New, key2)
+mac2, _ := mac.New(sha256.New, key2)
 mac2.Add([]byte("abcd"))
 fmt.Println(mac2.Result())
 ```
@@ -103,11 +107,11 @@ key := []byte{
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 
-mac1 := mac.New(sha256.New, key)
+mac1, _ := mac.New(sha256.New, key)
 mac1.Add([]byte("abcd"))
 fmt.Println(mac1.ResultWithCustomizer([]byte("customizer 0")))
 
-mac2 := mac.New(sha256.New, key)
+mac2, _ := mac.New(sha256.New, key)
 mac2.Add([]byte("abcd"))
 fmt.Println(mac2.ResultWithCustomizer([]byte("customizer 1")))
 ```
