@@ -2,7 +2,8 @@ package hash
 
 import (
 	"hash"
-	sequencefunc "sequencehash-go/internal"
+
+	sequencefunc "github.com/trailofbits/sequencehash-go/internal"
 )
 
 const (
