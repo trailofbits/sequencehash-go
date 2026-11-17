@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"crypto/sha512"
+	"hash"
 	"testing"
 )
 
@@ -64,13 +65,89 @@ func TestDeriveBlock(t *testing.T) {
 	if !bytes.Equal(expectedShort, shortDerived) {
 		t.Fatalf("Short derivation failed")
 	}
+}
 
-	// Make sure `deriveBlock` does not overwrite caller data
-	blockLengthKey := make([]byte, 64)
-	blockLengthZeroes := make([]byte, 64)
-	_ = deriveBlock(blockLengthKey, sha256.New, 0x00)
-	if !bytes.Equal(blockLengthKey, blockLengthZeroes) {
-		t.Fatalf("Derivation overwrote caller data")
+// patterned returns n non-zero bytes, so that a write of zeroes or an XOR with
+// a tweak is always visible.
+func patterned(n int) []byte {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = byte(i*131+7) | 0x01
+	}
+	return b
+}
+
+// deriveBlock must never write to the memory it is given, whatever the
+// input's length (shorter than, equal to or longer than the block) and
+// whether or not the slice has spare capacity after it. Its result must not
+// share memory with the input either.
+func TestDeriveBlockDoesNotTouchInput(t *testing.T) {
+	hashes := map[string]func() hash.Hash{"sha256": sha256.New, "sha512": sha512.New}
+	for name, h := range hashes {
+		blockSize := h().BlockSize()
+		for n := 0; n <= 2*blockSize+1; n++ {
+			for _, tweak := range []byte{TWEAK_INNER, TWEAK_OUTER} {
+				// The input is the first n bytes of a larger buffer, so it has
+				// blockSize bytes of spare capacity.
+				backing := patterned(n + blockSize)
+				input := backing[:n]
+				before := bytes.Clone(backing)
+
+				derived := deriveBlock(input, h, tweak)
+
+				if !bytes.Equal(backing, before) {
+					t.Fatalf("%s, %d-byte input, tweak %#x: input memory was modified", name, n, tweak)
+				}
+				if want := expectedBlock(before[:n], h, tweak); !bytes.Equal(derived, want) {
+					t.Fatalf("%s, %d-byte input, tweak %#x: wrong derived block", name, n, tweak)
+				}
+				for i := range derived {
+					derived[i] ^= 0xff
+				}
+				if !bytes.Equal(backing, before) {
+					t.Fatalf("%s, %d-byte input, tweak %#x: derived block shares memory with the input", name, n, tweak)
+				}
+			}
+		}
+	}
+}
+
+// expectedBlock computes deriveBlock's result independently: hash the input
+// if it is longer than the block, zero-pad it to the block size, and XOR the
+// tweak into the first byte.
+func expectedBlock(input []byte, h func() hash.Hash, tweak byte) []byte {
+	blockSize := h().BlockSize()
+	if len(input) > blockSize {
+		d := h()
+		d.Write(input)
+		input = d.Sum(nil)
+	}
+	block := make([]byte, blockSize)
+	copy(block, input)
+	block[0] ^= tweak
+	return block
+}
+
+// New must leave the caller's key untouched, for any key length, and the
+// result must not depend on what surrounds the key in memory.
+func TestNewDoesNotTouchKey(t *testing.T) {
+	for _, n := range []int{32, 63, 64, 65, 128} {
+		backing := patterned(n + 64)
+		key := backing[:n]
+		before := bytes.Clone(backing)
+
+		f := New(sha256.New, FUNCTION_ID_MAC, key)
+		f.Add([]byte("abc"))
+		got := f.Result()
+
+		if !bytes.Equal(backing, before) {
+			t.Fatalf("%d-byte key: key memory was modified", n)
+		}
+		g := New(sha256.New, FUNCTION_ID_MAC, bytes.Clone(before[:n]))
+		g.Add([]byte("abc"))
+		if !bytes.Equal(got, g.Result()) {
+			t.Fatalf("%d-byte key: result depends on the key's backing array", n)
+		}
 	}
 }
 
