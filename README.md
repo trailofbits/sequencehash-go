@@ -4,6 +4,19 @@ This package provides the SequenceHash and SequenceMAC functions for the Go prog
 
 You can use SequenceHash and SequenceMAC with nearly any underlying hash function.
 
+# Installation
+
+```sh
+go get github.com/trailofbits/sequencehash-go
+```
+
+```go
+import (
+    "github.com/trailofbits/sequencehash-go/hash" // SequenceHash
+    "github.com/trailofbits/sequencehash-go/mac"  // SequenceMAC
+)
+```
+
 # How to Use SequenceHash and SequenceMAC
 
 ## Using SequenceHash
