@@ -6,7 +6,8 @@ package mac
 import (
 	"fmt"
 	"hash"
-	sequencefunc "sequencehash-go/internal"
+
+	sequencefunc "github.com/trailofbits/sequencehash-go/internal"
 )
 
 const (
