@@ -139,3 +139,7 @@ It's important to note that the API provided by SequenceHash is _not_ compatible
 The `Hash` interface provides the `io.Writer` interface, which deviates from the goal of SequenceHash. The `io.Writer` interface can write a partial buffer, and in I/O contexts, it's assumed that calling `Write(a)` immediately before calling `Write(b)` is the same as calling `Write` on the concatenation of `a` and `b` (barring race conditions and other oddball cases). SequenceHash behaves differently: hashing `a` and then `b` is not the same as hashing their concatenation, and there's no concept of a partial write.
 
 To prevent confusion, we use different method names. In lieu of `Write`, we use `Add`, and instead of `Sum`, we use `Result` (or `ResultWithCustomizer`).
+
+# Testing
+
+`go test ./...` runs the unit tests. The [C2SP/CCTV](https://github.com/C2SP/CCTV/tree/main/sequencehash) test vectors run from the separate `conformance` module; see `conformance/cctv_test.go` for how to point it at a CCTV checkout. CI runs both.

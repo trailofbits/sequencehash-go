@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # C2SP/CCTV commit whose sequencehash/ vectors match conformance/testdata/cctv.sha256.
+  CCTV_COMMIT: 50a8ecf2a220f4c8bdc4f085789b8e85c26829e7
+
+jobs:
+  test:
+    name: Go ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The minimum version from go.mod, plus the current stable release.
+        include:
+          - name: go.mod
+            version-file: go.mod
+          - name: stable
+            version: stable
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ matrix.version }}
+          go-version-file: ${{ matrix.version-file }}
+          cache-dependency-path: conformance/go.sum
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race ./...
+
+      - name: Fetch C2SP/CCTV vectors
+        run: |
+          git init -q "$RUNNER_TEMP/cctv"
+          git -C "$RUNNER_TEMP/cctv" fetch -q --depth 1 https://github.com/C2SP/CCTV "$CCTV_COMMIT"
+          git -C "$RUNNER_TEMP/cctv" checkout -q FETCH_HEAD
+
+      - name: CCTV conformance
+        working-directory: conformance
+        env:
+          SEQUENCEHASH_CCTV_DIR: ${{ runner.temp }}/cctv/sequencehash
+        run: |
+          go vet ./...
+          go test -race -v ./...
