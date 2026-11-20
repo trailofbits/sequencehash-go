@@ -1,9 +1,13 @@
 package mac
 
 import (
+	"crypto/md5"
+	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/subtle"
 	"fmt"
+	"hash"
 
 	"encoding/hex"
 	"testing"
@@ -35,6 +39,48 @@ func TestShortKey(t *testing.T) {
 	hasher, err := New(sha256.New, key)
 	if err == nil || hasher != nil {
 		t.Errorf("Short key accepted; this should not happen!")
+	}
+}
+
+func TestShortHash(t *testing.T) {
+	key := make([]byte, 64)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	short := map[string]func() hash.Hash{
+		"md5":        md5.New,
+		"sha1":       sha1.New,
+		"sha224":     sha256.New224,
+		"sha512/224": sha512.New512_224,
+	}
+	for name, h := range short {
+		if m, err := New(h, key); err == nil || m != nil {
+			t.Errorf("%s: short hash accepted; this should not happen!", name)
+		}
+		// NewWithShortHash is the explicit opt-in. It still checks the key.
+		m, err := NewWithShortHash(h, key)
+		if err != nil || m == nil {
+			t.Errorf("%s: NewWithShortHash rejected: %v", name, err)
+			continue
+		}
+		m.Add([]byte("abcd"))
+		if len(m.Result()) != h().Size() {
+			t.Errorf("%s: wrong output length", name)
+		}
+		if m, err := NewWithShortHash(h, key[:31]); err == nil || m != nil {
+			t.Errorf("%s: NewWithShortHash accepted a short key", name)
+		}
+	}
+	long := map[string]func() hash.Hash{
+		"sha256":     sha256.New,
+		"sha384":     sha512.New384,
+		"sha512":     sha512.New,
+		"sha512/256": sha512.New512_256,
+	}
+	for name, h := range long {
+		if m, err := New(h, key); err != nil || m == nil {
+			t.Errorf("%s: rejected: %v", name, err)
+		}
 	}
 }
 
