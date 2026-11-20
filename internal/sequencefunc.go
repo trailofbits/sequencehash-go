@@ -79,6 +79,13 @@ func deriveBlock(data []byte, h func() hash.Hash, tweak byte) []byte {
 	// Pad out our key
 	padded := padData(reduced, uint64(reducer.BlockSize()))
 
+	// If the value was hashed down, wipe that hash: for a key it is as
+	// sensitive as the key (see initialize). Don't touch `data` itself; it
+	// belongs to the caller.
+	if len(data) > reducer.BlockSize() {
+		clear(reduced)
+	}
+
 	// Apply the tweak
 	padded[0] ^= tweak
 
@@ -191,6 +198,20 @@ func New(h func() hash.Hash, eFunc uint64, key []byte) SequenceFunc {
 	return SequenceFunc
 }
 
+// Sets up the keyed inner and outer hashes.
+//
+// The SequenceHash specification says implementations "SHOULD zeroize K, K_I,
+// and K_O when no longer needed for computations", and asks for deviations
+// from a SHOULD to be documented. This is best effort:
+//
+//   - K_I and K_O (the derived key blocks) are wiped below once they have been
+//     written into the hashes, and the hash of a key longer than the block
+//     size is wiped in deriveBlock. Go's garbage collector doesn't move heap
+//     objects, so this overwrites the only copies this package made.
+//   - K belongs to the caller, who should wipe it.
+//   - The keyed hash states hold key-derived data, and hash.Hash has no way to
+//     wipe them.
+//   - Copies the Go runtime makes on its own (registers, stack) aren't wiped.
 func (f *SequenceFunc) initialize(key []byte) {
 	// Derive our key and separator blocks
 	derived_key_inner := deriveBlock(key, f.hashFunc, TWEAK_INNER)

@@ -119,6 +119,10 @@ generates the output
 [225 97 172 180 234 222 85 22 200 204 18 163 122 131 240 218 165 190 196 121 24 13 129 119 231 104 179 239 39 85 164 147]
 ```
 
+## Key material
+
+The [specification](https://c2sp.org/sequencehash) says implementations SHOULD zeroize the key and the derived key blocks when they are no longer needed. This package does so on a best-effort basis: it wipes the derived key blocks, and the hash of a key longer than the block size, as soon as they have been used. It can't wipe your key (wipe it yourself when you are done with it) or the keyed hash states inside a SequenceMAC.
+
 ## A note on terminology
 
 It's important to note that the API provided by SequenceHash is _not_ compatible with the standard `hash.Hash` API. This is not an accident.
