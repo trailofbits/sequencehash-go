@@ -2,7 +2,14 @@
 
 This package provides the SequenceHash and SequenceMAC functions for the Go programming language. You can find more details about the SequenceHash family of functions [here](https://c2sp.org/sequencehash), but the short version is that writing to SequenceHash and SequenceMAC objects is an _atomic_ operation: writing `abcd` is _not_ the same as writing `ab` and `cd` separately.
 
-You can use SequenceHash and SequenceMAC with nearly any underlying hash function.
+You can use SequenceHash with nearly any underlying hash function. `mac.New` requires a hash function with at least 32 bytes of output.
+
+## Short hashes
+
+A "short hash" is a hash function with less than 32 bytes of output, such as SHA-1, MD5, SHA-224 or SHA3-224. SequenceHash and SequenceMAC are only as secure as the underlying hash, and with a short hash, MAC security is bounded by the output length regardless of key length.
+
+- `mac.New` rejects short hashes with an error. The [specification](https://c2sp.org/sequencehash) says implementations SHOULD warn when SequenceMAC is used with a short hash, and MAY reject them instead. Go has no idiomatic way for a library to warn, so `mac.New` rejects them. If you need a short hash, for example to interoperate with an existing system, `mac.NewWithShortHash` accepts one; calling it is your acknowledgement of the risk.
+- `hash.New` accepts short hashes, as the specification allows, but you should prefer a hash with at least 32 bytes of output, such as SHA-256.
 
 # How to Use SequenceHash and SequenceMAC
 
